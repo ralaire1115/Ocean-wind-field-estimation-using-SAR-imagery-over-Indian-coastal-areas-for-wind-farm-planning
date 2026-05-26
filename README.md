@@ -5,9 +5,9 @@
 ![Google Earth Engine](https://img.shields.io/badge/Earth_Engine-4285F4?style=for-the-badge&logo=google&logoColor=white)
 ![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python&logoColor=white)
 
-> A deep-learning-powered REST API that estimates ocean surface wind speed (m/s) and meteorological wind direction (°) over the coastal regions of India (Tamil Nadu and Gujarat).
+> A deep-learning-powered API that estimates ocean surface wind speed (m/s) and meteorological wind direction (°) over the coastal regions of India (Tamil Nadu and Gujarat).
 
-This application automatically queries **Google Earth Engine (GEE)** for the closest Sentinel-1 Synthetic Aperture Radar (SAR) imagery, downloads the relevant patches, and processes them through a customized **ResNet-18 regression model**.
+This application automatically queries **Google Earth Engine (GEE)** for the closest Sentinel-1 Synthetic Aperture Radar (SAR) imagery, downloads the relevant patches, and processes them through a customized **ResNet-18 regression model**, under **Fast API**.
 
 ---
 
