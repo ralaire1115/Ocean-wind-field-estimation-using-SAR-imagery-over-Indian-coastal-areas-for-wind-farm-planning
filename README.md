@@ -11,28 +11,28 @@ This application automatically queries **Google Earth Engine (GEE)** for the clo
 
 ---
 
-## ✨ Key Features
+##  Key Features
 
-* **🛰️ Automated Data Pipeline:** Direct integration with the `COPERNICUS/S1_GRD` database to fetch Sentinel-1 IW/VV backscatter data dynamically.
-* **🧠 Deep Learning Inference:** A modified PyTorch ResNet-18 backbone optimized for 1-channel SAR input, predicting continuous wind velocity vectors.
-* **📊 Dual Output Modes:** * `JSON`: Clean, structured data for programmatic integration.
+* ** Automated Data Pipeline:** Direct integration with the `COPERNICUS/S1_GRD` database to fetch Sentinel-1 IW/VV backscatter data dynamically.
+* ** Deep Learning Inference:** A modified PyTorch ResNet-18 backbone optimized for 1-channel SAR input, predicting continuous wind velocity vectors.
+* ** Dual Output Modes:** * `JSON`: Clean, structured data for programmatic integration.
   * `PNG Map`: Real-time Matplotlib/Cartopy generated Quiver plots of the wind field.
-* **🛡️ Robust Error Handling:** Strict date validations (post-2014) and explicit HTTP status codes for GEE connection issues and missing satellite passes.
+* ** Robust Error Handling:** Strict date validations (post-2014) and explicit HTTP status codes for GEE connection issues and missing satellite passes.
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 
-| File Name | Role | Description |
+| File Name | Description |
 | :--- | :---: | :--- |
-| **`requirements.txt`** | 📦 | Lists all third-party libraries needed to manage data and web routing. |
-| **`gee_engine.py`** | 📡 | Authenticates with Google Cloud, queries satellite passes, and extracts imagery arrays. |
-| **`wind_model.py`** | 🤖 | Houses the single-channel ResNet-18 neural network that estimates velocity vectors. |
-| **`main.py`** | 🚀 | Runs the FastAPI app, manages routing, validates bounds, and generates the quiver maps. |
+| **`requirements.txt`** | Lists all third-party libraries needed to manage data and web routing. |
+| **`gee_engine.py`** | Authenticates with Google Cloud, queries satellite passes, and extracts imagery arrays. |
+| **`wind_model.py`** | Houses the single-channel ResNet-18 neural network that estimates velocity vectors. |
+| **`main.py`** | Runs the FastAPI app, manages routing, validates bounds, and generates the quiver maps. |
 
 ---
 
-## 🛠️ Local Installation (Windows)
+##  Local Installation (Windows)
 
 Follow these steps to set up the environment and bypass common Windows C++ compiler conflicts.
 
@@ -83,11 +83,11 @@ python main.py
 
 ```
 
-📍 **Live Dashboard:** Once running, access the interactive Swagger UI at `http://localhost:8000/docs`
+ **Live Dashboard:** Once running, access the interactive Swagger UI at `http://localhost:8000/docs`
 
 ---
 
-## 🧭 API Endpoints
+##  API Endpoints
 
 ### 1. Get Wind Field Data (JSON)
 
@@ -125,17 +125,17 @@ Generates a Quiver plot showing wind direction arrows layered over a wind-speed 
 
 ---
 
-## 🛑 HTTP Status Codes
+##  HTTP Status Codes
 
 The API uses standard HTTP response codes to indicate the success or failure of an API request.
 
 | Code | Status | Description |
 | --- | --- | --- |
-| **`200`** | ✅ `OK` | Request succeeded; data or map generated successfully. |
-| **`400`** | ⚠️ `Bad Request` | Unsupported region requested, or date is outside the 2014-present window. |
-| **`404`** | 🚫 `Not Found` | GEE confirmed no Sentinel-1 image exists for that region within the $\pm$ 5-day sweep. |
-| **`422`** | 🛑 `Validation Error` | Missing parameter or incorrect data type (e.g., malformed date string). |
-| **`500`** | 💥 `Internal Error` | The PyTorch model crashed or received a malformed input array from GEE. |
-| **`502`** | ⚡ `Bad Gateway` | Google Earth Engine servers timed out or refused the connection. |
+| **`200`** |  `OK` | Request succeeded; data or map generated successfully. |
+| **`400`** |  `Bad Request` | Unsupported region requested, or date is outside the 2014-present window. |
+| **`404`** |  `Not Found` | GEE confirmed no Sentinel-1 image exists for that region within the $\pm$ 5-day sweep. |
+| **`422`** |  `Validation Error` | Missing parameter or incorrect data type (e.g., malformed date string). |
+| **`500`** |  `Internal Error` | The PyTorch model crashed or received a malformed input array from GEE. |
+| **`502`** |  `Bad Gateway` | Google Earth Engine servers timed out or refused the connection. |
 
 ---
