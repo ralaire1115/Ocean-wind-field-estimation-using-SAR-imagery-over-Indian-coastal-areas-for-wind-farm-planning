@@ -13,11 +13,11 @@ This application automatically queries **Google Earth Engine (GEE)** for the clo
 
 ##  Key Features
 
-* ** Automated Data Pipeline:** Direct integration with the `COPERNICUS/S1_GRD` database to fetch Sentinel-1 IW/VV backscatter data dynamically.
-* ** Deep Learning Inference:** A modified PyTorch ResNet-18 backbone optimized for 1-channel SAR input, predicting continuous wind velocity vectors.
-* ** Dual Output Modes:** * `JSON`: Clean, structured data for programmatic integration.
+* **Automated Data Pipeline:** Direct integration with the `COPERNICUS/S1_GRD` database to fetch Sentinel-1 IW/VV backscatter data dynamically.
+* **Deep Learning Inference:** A modified PyTorch ResNet-18 backbone optimized for 1-channel SAR input, predicting continuous wind velocity vectors.
+* **Dual Output Modes:** * `JSON`: Clean, structured data for programmatic integration.
   * `PNG Map`: Real-time Matplotlib/Cartopy generated Quiver plots of the wind field.
-* ** Robust Error Handling:** Strict date validations (post-2014) and explicit HTTP status codes for GEE connection issues and missing satellite passes.
+* **Robust Error Handling:** Strict date validations (post-2014) and explicit HTTP status codes for GEE connection issues and missing satellite passes.
 
 ---
 
