@@ -74,7 +74,7 @@ earthengine authenticate
 
 ```
 
-*Note: The email you log in with must have the `Earth Engine Resource Viewer` role assigned within your Google Cloud Project.*
+*Note: The email you log in with must have the `Earth Engine Resource Viewer` role assigned within your Google Cloud Project.(use G-Suite ID)*
 
 **6. Ignite the Server**
 
