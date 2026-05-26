@@ -1,0 +1,79 @@
+SAR Ocean Wind Field Estimation API
+===================================
+Comprehensive Local Setup & Usage Guide (Windows)
+
+This guide provides step-by-step instructions to initialize, authenticate, and run the SAR Wind Field API locally, incorporating all deep-learning and mapping visualizations.
+
+---------------------------------------------------------
+PART 1: INITIAL SETUP & INSTALLATION
+---------------------------------------------------------
+
+Step 1: Activate Your Virtual Environment
+Open your terminal (PowerShell or Command Prompt) in your project folder.
+If using PowerShell, run:
+    venv\Scripts\activate
+
+*Troubleshooting:* If you see a red security error about scripts being disabled, switch to Command Prompt (type `cmd`) and run `venv\Scripts\activate.bat`, OR run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` in PowerShell first.
+
+Step 2: Install Standard Dependencies
+Ensure your `requirements.txt` does not have strict versions for PyTorch or heavy C++ libraries to avoid Windows compiler errors.
+    pip install -r requirements.txt
+
+Step 3: Install PyTorch (Windows CPU)
+Install the pre-compiled Windows CPU binaries directly to prevent version conflicts:
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+Step 4: Install Cartopy (For Advanced Map Visualizations)
+To ensure the `/api/v1/wind-map` endpoint draws accurate landmass borders and coastlines:
+    pip install cartopy
+
+---------------------------------------------------------
+PART 2: GOOGLE EARTH ENGINE AUTHENTICATION
+---------------------------------------------------------
+
+Step 5: Authenticate Your Environment
+Link your local environment to your Google Cloud Project:
+    earthengine authenticate
+
+A browser window will open. Log in (using G-Suite ID) and generate the token.
+
+---------------------------------------------------------
+PART 3: RUNNING & USING THE API
+---------------------------------------------------------
+
+Step 6: Start the Server
+With everything installed and authenticated, start the Uvicorn server:
+    python main.py
+
+Step 7: Access the Dashboard
+Open your web browser and navigate to the interactive documentation:
+    http://localhost:8000/docs
+
+Step 8: Test the Endpoints
+You have two primary endpoints to test via the "Try it out" -> "Execute" buttons:
+
+1. GET /api/v1/wind-field
+   - Returns pure JSON data (wind speed in m/s, direction in degrees).
+   - This tests the PyTorch ResNet-18 model and GEE array downloads.
+
+2. GET /api/v1/wind-map
+   - Returns a PNG Quiver plot image.
+   - Shows a heatmap of wind speed and uniform directional arrows layered over Cartopy landmass bounds.
+
+---------------------------------------------------------
+PART 4: API CONSTRAINTS & HTTP STATUS CODES
+---------------------------------------------------------
+
+Data Availability Constraints:
+- Earliest Date: 2014-10-01 (Sentinel-1 operational data start date).
+- Latest Date: Today.
+- Note: The API automatically searches a ±5-day window around your target date to guarantee a satellite image hit.
+
+Understanding Server Responses (Status Codes):
+When you hit 'Execute', look at the "Server response" code:
+- 200 OK: Everything worked perfectly.
+- 400 Bad Request: You asked for an unsupported region or a date outside the 2014-10-01 to Present window.
+- 404 Not Found: The query was valid, but Google Earth Engine confirmed Sentinel-1 did not capture that region during your requested ±5-day window.
+- 422 Validation Error: You forgot a required parameter or sent the wrong data type.
+- 500 Internal Server Error: The Python code crashed (e.g., the PyTorch model received a malformed array).
+- 502 Bad Gateway: Google Earth Engine's servers are temporarily down or the connection timed out.
