@@ -24,7 +24,7 @@ This application automatically queries **Google Earth Engine (GEE)** for the clo
 ##  Project Structure
 
 | File Name | Description |
-| :--- | :---: | :--- |
+| :--- | :--- |
 | **`requirements.txt`** | Lists all third-party libraries needed to manage data and web routing. |
 | **`gee_engine.py`** | Authenticates with Google Cloud, queries satellite passes, and extracts imagery arrays. |
 | **`wind_model.py`** | Houses the single-channel ResNet-18 neural network that estimates velocity vectors. |
