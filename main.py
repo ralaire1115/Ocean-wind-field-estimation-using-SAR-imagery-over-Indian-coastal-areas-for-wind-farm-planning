@@ -1,31 +1,7 @@
-"""
-main.py
-=======
-FastAPI application for the SAR Ocean Wind Field Estimation API.
-
-Endpoints
----------
-GET /api/v1/wind-field
-    Query Sentinel-1 SAR data from GEE for a coastal region of India and
-    return deep-learning-based wind speed & direction estimates.
-
-    Query parameters
-    ~~~~~~~~~~~~~~~~
-    region : str   – 'tamil_nadu' or 'gujarat'
-    date   : str   – ISO-8601 date (YYYY-MM-DD)
-
-Usage (development)
--------------------
-    uvicorn main:app --reload --port 8000
-
-Then open:
-    http://localhost:8000/docs                         ← Swagger UI
-    http://localhost:8000/api/v1/wind-field?region=tamil_nadu&date=2024-01-15
-"""
 import io
 import numpy as np
 import matplotlib
-matplotlib.use('Agg') # Must be set before importing pyplot
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 from fastapi.responses import StreamingResponse
 
@@ -40,18 +16,14 @@ from pydantic import BaseModel
 from gee_engine import fetch_sar_image, REGION_BBOX
 from wind_model import calculate_wind_vectors, WindVector
 
-# ---------------------------------------------------------------------------
 # Logging configuration
-# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # FastAPI application
-# ---------------------------------------------------------------------------
 app = FastAPI(
     title="SAR Ocean Wind Field Estimation API",
     description=(
@@ -69,9 +41,7 @@ app = FastAPI(
 )
 
 
-# ---------------------------------------------------------------------------
 # Response schema
-# ---------------------------------------------------------------------------
 
 class WindFieldResponse(BaseModel):
     """Structured JSON response returned by the wind-field endpoint."""
@@ -89,9 +59,7 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
-# ---------------------------------------------------------------------------
 # Helper: validate date string
-# ---------------------------------------------------------------------------
 
 def _parse_date(date_str: str) -> str:
     """
@@ -129,9 +97,7 @@ def _parse_date(date_str: str) -> str:
     return date_str
 
 
-# ---------------------------------------------------------------------------
-# Helper: validate region
-# ---------------------------------------------------------------------------
+# Validate region
 
 def _validate_region(region: str) -> str:
     """
@@ -153,9 +119,7 @@ def _validate_region(region: str) -> str:
     return key
 
 
-# ---------------------------------------------------------------------------
 # Routes
-# ---------------------------------------------------------------------------
 
 @app.get("/", include_in_schema=False)
 async def root() -> Dict[str, str]:
@@ -210,9 +174,7 @@ async def get_wind_field(
     - GEE queries use a ±5-day window to improve scene availability.
     """
 
-    # ------------------------------------------------------------------
     # 1. Parameter validation
-    # ------------------------------------------------------------------
     normalised_region = _validate_region(region)
     validated_date    = _parse_date(date)
 
@@ -221,9 +183,7 @@ async def get_wind_field(
         normalised_region, validated_date,
     )
 
-    # ------------------------------------------------------------------
     # 2. Fetch SAR image from Google Earth Engine
-    # ------------------------------------------------------------------
     try:
         sar_array = fetch_sar_image(
             region_name=normalised_region,
@@ -256,9 +216,7 @@ async def get_wind_field(
             detail=f"Unexpected GEE error: {type(exc).__name__}: {exc}",
         )
 
-    # ------------------------------------------------------------------
     # 3. Run deep-learning wind inference
-    # ------------------------------------------------------------------
     try:
         wind: WindVector = calculate_wind_vectors(sar_array)
     except ValueError as exc:
@@ -274,9 +232,7 @@ async def get_wind_field(
             detail=f"Inference error: {type(exc).__name__}: {exc}",
         )
 
-    # ------------------------------------------------------------------
     # 4. Build and return the response
-    # ------------------------------------------------------------------
     patch_size: int = sar_array.shape[-1]   # last dim = width = height
 
     response = WindFieldResponse(
@@ -301,9 +257,7 @@ async def get_wind_field(
     return response
 
 
-# ---------------------------------------------------------------------------
 # 5. Plotting the Quiver Plot Endpoint
-# ---------------------------------------------------------------------------
 @app.get(
     "/api/v1/wind-map", 
     responses={200: {"content": {"image/png": {}}}},
@@ -399,9 +353,7 @@ def get_wind_map_image(
     return StreamingResponse(buf, media_type="image/png")
  
 
-# ---------------------------------------------------------------------------
 # Application entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn
