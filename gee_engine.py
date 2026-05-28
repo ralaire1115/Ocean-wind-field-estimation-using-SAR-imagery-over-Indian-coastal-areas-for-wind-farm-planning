@@ -1,24 +1,3 @@
-"""
-gee_engine.py
-=============
-Handles all interaction with Google Earth Engine (GEE).
-
-Responsibilities
-----------------
-- Authenticate and initialise the GEE session.
-- Define region-of-interest (ROI) bounding boxes for Tamil Nadu and Gujarat.
-- Query the Sentinel-1 GRD collection filtered by date, region, instrument
-  mode (IW) and polarisation (VV).
-- Download the selected image patch and return it as a NumPy float32 array
-  ready to be consumed by the PyTorch wind model.
-
-Environment
------------
-Set the environment variable GEE_SERVICE_ACCOUNT_KEY to the path of your
-GEE service-account JSON key file, or rely on `gcloud auth application-
-default login` for interactive use.
-"""
-
 import os
 import io
 import logging
@@ -31,18 +10,15 @@ import ee
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # Constants
-# ---------------------------------------------------------------------------
 
 # Sentinel-1 GRD collection identifier on GEE
 S1_COLLECTION = "COPERNICUS/S1_GRD"
 
 # Patch size (pixels) fetched from GEE.  Kept small for fast API responses.
-PATCH_SIZE = 256          # 256 × 256 pixels  (~640 m resolution at 20 m/px)
+PATCH_SIZE = 256          # ~640 m resolution at 20 m/px
 SCALE_METRES = 20         # Sentinel-1 IW native GRD resolution ≈ 20 m
 
-# Approximate bounding boxes  [west, south, east, north]  (EPSG:4326)
 REGION_BBOX = {
     "tamil_nadu": [78.0, 8.0,  80.5, 13.5],
     "gujarat":    [68.0, 20.0, 74.5, 24.5],
@@ -51,20 +27,9 @@ REGION_BBOX = {
 # GEE bands we care about
 POLARISATION = "VV"
 
-
-# ---------------------------------------------------------------------------
 # Initialisation
-# ---------------------------------------------------------------------------
 
 def _initialise_gee() -> None:
-    """
-    Authenticate and initialise the Earth Engine Python API.
-
-    Supports two authentication modes:
-    1. Service-account key  – set GEE_SERVICE_ACCOUNT_KEY=/path/to/key.json
-    2. Default credentials  – relies on `earthengine authenticate` or
-       `gcloud auth application-default login` having been run beforehand.
-    """
     key_path: Optional[str] = os.getenv("GEE_SERVICE_ACCOUNT_KEY")
 
     if key_path and os.path.isfile(key_path):
@@ -81,9 +46,7 @@ def _initialise_gee() -> None:
         logger.info("GEE initialised via default credentials.")
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 def fetch_sar_image(region_name: str, target_date: str) -> np.ndarray:
     """
@@ -112,28 +75,22 @@ def fetch_sar_image(region_name: str, target_date: str) -> np.ndarray:
         If no Sentinel-1 image is found for the requested region/date, or if
         the GEE download fails.
     """
-    # ------------------------------------------------------------------
     # 1. Validate region
-    # ------------------------------------------------------------------
     key = region_name.lower().replace(" ", "_")
     if key not in REGION_BBOX:
         raise ValueError(
             f"Unknown region '{region_name}'. "
             f"Valid options: {list(REGION_BBOX.keys())}"
         )
-    bbox = REGION_BBOX[key]                           # [W, S, E, N]
+    bbox = REGION_BBOX[key]                           
 
-    # ------------------------------------------------------------------
     # 2. Initialise GEE (idempotent – MUST happen before ee objects)
-    # ------------------------------------------------------------------
     _initialise_gee()
     
     # Now that GEE is initialized, we can create the Geometry object
     roi = ee.Geometry.Rectangle(bbox)
 
-    # ------------------------------------------------------------------
     # 3. Build date window (±1 day for better coverage)
-    # ------------------------------------------------------------------
     date_obj   = ee.Date(target_date)
     start_date = date_obj.advance(-5, "day")
     end_date   = date_obj.advance(5, "day")
@@ -142,10 +99,7 @@ def fetch_sar_image(region_name: str, target_date: str) -> np.ndarray:
         "Querying S1-GRD | region=%s | date=%s | bbox=%s",
         region_name, target_date, bbox,
     )
-
-    # ------------------------------------------------------------------
     # 4. Filter Sentinel-1 GRD collection
-    # ------------------------------------------------------------------
     collection = (
         ee.ImageCollection(S1_COLLECTION)
         .filterBounds(roi)
@@ -169,18 +123,14 @@ def fetch_sar_image(region_name: str, target_date: str) -> np.ndarray:
     # Use the most recent scene in the window
     image: ee.Image = collection.sort("system:time_start", False).first()
 
-    # ------------------------------------------------------------------
     # 5. Download the image patch as a GeoTIFF
-    # ------------------------------------------------------------------
     sar_array = _download_image_as_array(image, roi)
 
     logger.info("SAR patch downloaded successfully. Shape: %s", sar_array.shape)
     return sar_array
 
 
-# ---------------------------------------------------------------------------
 # Private helpers
-# ---------------------------------------------------------------------------
 
 def _download_image_as_array(image: ee.Image, roi: ee.Geometry) -> np.ndarray:
     """
