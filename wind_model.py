@@ -1,7 +1,4 @@
 """
-wind_model.py
-=============
-Deep-learning inference for ocean wind-field estimation from SAR imagery.
 
 Architecture
 ------------
@@ -32,18 +29,14 @@ from torchvision.models import resnet18, ResNet18_Weights
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # Constants
-# ---------------------------------------------------------------------------
 
 WIND_SPEED_MAX   = 40.0    # m/s  – used to scale sigmoid output
 WIND_DIR_MAX     = 360.0   # degrees
 DEVICE           = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# ---------------------------------------------------------------------------
 # Output dataclass
-# ---------------------------------------------------------------------------
 
 @dataclass
 class WindVector:
@@ -52,9 +45,7 @@ class WindVector:
     wind_dir_deg:   float   # Estimated wind direction (meteorological, 0-360°)
 
 
-# ---------------------------------------------------------------------------
 # Model definition
-# ---------------------------------------------------------------------------
 
 class SARWindNet(nn.Module):
     """
@@ -77,7 +68,7 @@ class SARWindNet(nn.Module):
         weights = ResNet18_Weights.DEFAULT if pretrained else None
         backbone = resnet18(weights=weights)
 
-        # ---- Patch stem: 3-channel → 1-channel ----
+        # Patch stem: 3-channel → 1-channel 
         original_conv = backbone.conv1           # Conv2d(3, 64, 7, stride=2, padding=3)
         backbone.conv1 = nn.Conv2d(
             in_channels=1,
@@ -95,7 +86,7 @@ class SARWindNet(nn.Module):
                     original_conv.weight.mean(dim=1, keepdim=True)
                 )
 
-        # ---- Keep everything except the original classifier ----
+        # Keep everything except the original classifier
         self.feature_extractor = nn.Sequential(
             backbone.conv1,
             backbone.bn1,
@@ -108,7 +99,7 @@ class SARWindNet(nn.Module):
             backbone.avgpool,           # AdaptiveAvgPool2d → (B, 512, 1, 1)
         )
 
-        # ---- Custom regression head ----
+        # Custom regression head 
         in_features: int = backbone.fc.in_features   # 512 for ResNet-18
         self.regressor = nn.Linear(in_features, 2)
 
@@ -148,9 +139,7 @@ class SARWindNet(nn.Module):
         return torch.stack([speed, direc], dim=1)
 
 
-# ---------------------------------------------------------------------------
 # Lazy model singleton (loaded once per process)
-# ---------------------------------------------------------------------------
 
 _model: SARWindNet | None = None
 
@@ -170,9 +159,7 @@ def _get_model() -> SARWindNet:
     return _model
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 def calculate_wind_vectors(sar_image_array: np.ndarray) -> WindVector:
     """
@@ -196,9 +183,7 @@ def calculate_wind_vectors(sar_image_array: np.ndarray) -> WindVector:
     ValueError
         If the input array has an unexpected shape or dtype.
     """
-    # ------------------------------------------------------------------
     # 1. Validate and reshape input
-    # ------------------------------------------------------------------
     arr = np.asarray(sar_image_array, dtype=np.float32)
 
     if arr.ndim == 2:
@@ -210,18 +195,14 @@ def calculate_wind_vectors(sar_image_array: np.ndarray) -> WindVector:
             f"got {arr.shape}."
         )
 
-    # ------------------------------------------------------------------
     # 2. Build a (1, 1, H, W) tensor  [batch=1, channel=1]
-    # ------------------------------------------------------------------
     tensor: torch.Tensor = (
         torch.from_numpy(arr)
         .unsqueeze(0)            # (1, 1, H, W)
         .to(DEVICE)
     )
 
-    # ------------------------------------------------------------------
     # 3. Inference (no gradient needed)
-    # ------------------------------------------------------------------
     model = _get_model()
 
     with torch.no_grad():
