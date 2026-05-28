@@ -1,26 +1,20 @@
-# ============================================================
-# requirements.txt
-# SAR Ocean Wind Field Estimation API
-# ============================================================
-
-# --- Web Framework & Server ---
+# Web Framework & Server
 fastapi
 uvicorn[standard]
 pydantic
 
-# --- Google Earth Engine ---
+# Google Earth Engine
 earthengine-api
 geemap
 
-# --- Deep Learning (PyTorch) ---
-# Note: Installed separately via PyTorch index if not found
-
-# --- Array / Image Processing ---
+# Image Processing
 numpy
 Pillow
 requests
 rasterio
 
-# --- Utilities ---
+# tilities
 python-dotenv
 httpx
+
+# DO NOT put torch here, it breaks on Windows. Install manually using the link.
