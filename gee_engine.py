@@ -49,7 +49,7 @@ def _initialise_gee() -> None:
 
 # Public API
 
-def fetch_sar_image(region_name: str, target_date: str) -> tuple:
+def fetch_sar_image(lat: float, lon: float, target_date: str) -> tuple:
     """
     Fetch a Sentinel-1 GRD (VV, IW mode) image patch from GEE and return it
     as a normalised NumPy float32 array of shape ``(1, PATCH_SIZE, PATCH_SIZE)``.
@@ -76,20 +76,11 @@ def fetch_sar_image(region_name: str, target_date: str) -> tuple:
         If no Sentinel-1 image is found for the requested region/date, or if
         the GEE download fails.
     """
-    # 1. Validate region
-    key = region_name.lower().replace(" ", "_")
-    if key not in REGION_BBOX:
-        raise ValueError(
-            f"Unknown region '{region_name}'. "
-            f"Valid options: {list(REGION_BBOX.keys())}"
-        )
-    bbox = REGION_BBOX[key]                           
-
-    # 2. Initialise GEE (idempotent – MUST happen before ee objects)
+    # 1. Initialise GEE 
     _initialise_gee()
     
-    # Now that GEE is initialized, we can create the Geometry object
-    roi = ee.Geometry.Rectangle(bbox)
+    # 2. Create a precise 10km x 10km bounding box centered exactly on the requested coordinate
+    roi = ee.Geometry.Point([lon, lat]).buffer(5000).bounds()
 
     # 3. Build date window (±1 day for better coverage)
     date_obj   = ee.Date(target_date)
@@ -98,7 +89,7 @@ def fetch_sar_image(region_name: str, target_date: str) -> tuple:
 
     logger.info(
         "Querying S1-GRD | region=%s | date=%s | bbox=%s",
-        region_name, target_date, bbox,
+        lat, lon, target_date, 
     )
     # 4. Filter Sentinel-1 GRD collection
     collection = (
@@ -122,17 +113,17 @@ def fetch_sar_image(region_name: str, target_date: str) -> tuple:
     logger.info("Found %d S1 scene(s). Using the most recent one.", size)
 
     # Use the most recent scene in the window
-    image: ee.Image = collection.sort("system:time_start", False).first()
+    image: ee.Image = collection.sort("system:time_start", False).first()
     
-    # Extract the exact millisecond the radar fired and convert to ISO 8601
-    time_ms = image.get('system:time_start').getInfo()
-    exact_timestamp = datetime.datetime.utcfromtimestamp(time_ms / 1000.0).isoformat()
+    # Extract the exact millisecond the radar fired and convert to ISO 8601
+    time_ms = image.get('system:time_start').getInfo()
+    exact_timestamp = datetime.datetime.utcfromtimestamp(time_ms / 1000.0).isoformat()
 
-    # 5. Download the image patch as a GeoTIFF
-    sar_array = _download_image_as_array(image, roi)
+    # 5. Download the image patch as a GeoTIFF
+    sar_array = _download_image_as_array(image, roi)
 
-    logger.info("SAR patch downloaded successfully. Shape: %s", sar_array.shape)
-    return sar_array, exact_timestamp
+    logger.info("SAR patch downloaded successfully. Shape: %s", sar_array.shape)
+    return sar_array, exact_timestamp
 
 
 # Private helpers
