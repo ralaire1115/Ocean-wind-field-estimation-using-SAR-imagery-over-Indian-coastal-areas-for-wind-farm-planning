@@ -48,6 +48,7 @@ class WindFieldResponse(BaseModel):
 
     region:           str    # Region queried
     date:             str    # Date queried  (YYYY-MM-DD)
+    exact_timestamp:  str    # Exact ISO-8601 time of the satellite pass
     wind_speed_ms:    float  # Estimated wind speed  (m/s)
     wind_dir_deg:     float  # Estimated meteorological wind direction (0-360°)
     model_version:    str    # Model identifier for traceability
@@ -185,7 +186,7 @@ async def get_wind_field(
 
     # 2. Fetch SAR image from Google Earth Engine
     try:
-        sar_array = fetch_sar_image(
+        sar_array, exact_time = fetch_sar_image(
             region_name=normalised_region,
             target_date=validated_date,
         )
@@ -238,6 +239,7 @@ async def get_wind_field(
     response = WindFieldResponse(
         region=normalised_region,
         date=validated_date,
+        exact_timestamp=exact_time,
         wind_speed_ms=wind.wind_speed_ms,
         wind_dir_deg=wind.wind_dir_deg,
         model_version="SARWindNet-ResNet18-v1.0-skeleton",
