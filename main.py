@@ -46,9 +46,10 @@ app = FastAPI(
 class WindFieldResponse(BaseModel):
     """Structured JSON response returned by the wind-field endpoint."""
 
-    region:           str    # Region queried
+    latitude:         float  # Exact coordinate queried
+    longitude:        float
     date:             str    # Date queried  (YYYY-MM-DD)
-    exact_timestamp:  str    # Exact ISO-8601 time of the satellite pass
+    exact_timestamp:  str    # Exact ISO-8601 time of the satellite pass
     wind_speed_ms:    float  # Estimated wind speed  (m/s)
     wind_dir_deg:     float  # Estimated meteorological wind direction (0-360°)
     model_version:    str    # Model identifier for traceability
@@ -146,14 +147,11 @@ async def root() -> Dict[str, str]:
     tags=["Wind Field"],
 )
 async def get_wind_field(
-    region: str = Query(
-        ...,
-        description="Coastal region of India. Options: 'tamil_nadu', 'gujarat'.",
-        examples=["tamil_nadu"],
-    ),
+    lat: float = Query(..., description="Latitude of the target location.", examples=[22.25]),
+    lon: float = Query(..., description="Longitude of the target location.", examples=[71.25]),
     date: str = Query(
         ...,
-        description="Target date for SAR acquisition in YYYY-MM-DD format. Must be between 2014-10-01 and today.",
+        description="Target date for SAR acquisition in YYYY-MM-DD format.",
         examples=["2024-01-15"],
     ),
 ) -> WindFieldResponse:
@@ -176,18 +174,18 @@ async def get_wind_field(
     """
 
     # 1. Parameter validation
-    normalised_region = _validate_region(region)
     validated_date    = _parse_date(date)
 
     logger.info(
-        "Wind-field request | region=%s | date=%s",
-        normalised_region, validated_date,
+        "Wind-field request | lat=%.2f | lon=%.2f | date=%s",
+        lat, lon, validated_date,
     )
 
     # 2. Fetch SAR image from Google Earth Engine
     try:
         sar_array, exact_time = fetch_sar_image(
-            region_name=normalised_region,
+            lat=lat,
+            lon=lon,
             target_date=validated_date,
         )
     except ValueError as exc:
@@ -237,7 +235,8 @@ async def get_wind_field(
     patch_size: int = sar_array.shape[-1]   # last dim = width = height
 
     response = WindFieldResponse(
-        region=normalised_region,
+        latitude=lat,
+        longitude=lon,
         date=validated_date,
         exact_timestamp=exact_time,
         wind_speed_ms=wind.wind_speed_ms,
@@ -251,9 +250,9 @@ async def get_wind_field(
     )
 
     logger.info(
-        "Response | speed=%.2f m/s | dir=%.1f° | region=%s | date=%s",
+        "Response | speed=%.2f m/s | dir=%.1f° | lat=%.2f | lon=%.2f | date=%s",
         wind.wind_speed_ms, wind.wind_dir_deg,
-        normalised_region, validated_date,
+        lat, lon, validated_date,
     )
 
     return response
