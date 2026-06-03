@@ -1,3 +1,5 @@
+# SAR Ocean Wind Field Estimation API
+
 # Web Framework & Server
 fastapi
 uvicorn[standard]
@@ -7,14 +9,17 @@ pydantic
 earthengine-api
 geemap
 
+# Deep Learning (PyTorch)
+torch
+torchvision
+
 # Image Processing
 numpy
 Pillow
-requests
 rasterio
+scipy
 
-# tilities
+# Utilities
+requests
 python-dotenv
 httpx
-
-# DO NOT put torch here, it breaks on Windows. Install manually using the link.
