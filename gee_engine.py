@@ -1,9 +1,19 @@
+"""
+gee_engine.py
+=============
+Google Earth Engine dynamic downloader and metadata extractor.
+
+Intercepts requests, targets a specific bounding box, and pulls both the 
+SAR image array (for the AI) and the physical telemetry (incidence angle and sigma0) 
+required for the downstream CMOD5 physical modeling.
+"""
+
 import datetime
 import os
 import io
 import logging
 import zipfile
-from typing import Optional
+from typing import Dict, Any
 
 import numpy as np
 import requests
@@ -11,207 +21,111 @@ import ee
 
 logger = logging.getLogger(__name__)
 
-# Constants
-
-# Sentinel-1 GRD collection identifier on GEE
 S1_COLLECTION = "COPERNICUS/S1_GRD"
-
-# Patch size (pixels) fetched from GEE.  Kept small for fast API responses.
-PATCH_SIZE = 256          # ~640 m resolution at 20 m/px
-SCALE_METRES = 20         # Sentinel-1 IW native GRD resolution ≈ 20 m
-
-REGION_BBOX = {
-    "tamil_nadu": [78.0, 8.0,  80.5, 13.5],
-    "gujarat":    [68.0, 20.0, 74.5, 24.5],
-}
-
-# GEE bands we care about
+PATCH_SIZE = 256          
 POLARISATION = "VV"
 
-# Initialisation
-
-def _initialise_gee() -> None:
-    key_path: Optional[str] = os.getenv("GEE_SERVICE_ACCOUNT_KEY")
-
+def _initialise_gee():
+    """Authenticates the GEE session using service accounts or local credentials."""
+    key_path = os.getenv("GEE_SERVICE_ACCOUNT_KEY")
     if key_path and os.path.isfile(key_path):
-        # Service-account flow (recommended for server deployments)
-        credentials = ee.ServiceAccountCredentials(
-            email=None,   # email is read from the JSON key file
-            key_file=key_path,
-        )
+        credentials = ee.ServiceAccountCredentials(email=None, key_file=key_path)
         ee.Initialize(credentials)
-        logger.info("GEE initialised via service-account key: %s", key_path)
     else:
-        # Interactive / default credential flow (local development)
         ee.Initialize(project='cec-open-ocean-wind-field-est')
-        logger.info("GEE initialised via default credentials.")
 
-
-# Public API
-
-def fetch_sar_image(lat: float, lon: float, target_date: str) -> tuple:
+def fetch_sar_image(lat: float, lon: float, target_date: str) -> Dict[str, Any]:
     """
-    Fetch a Sentinel-1 GRD (VV, IW mode) image patch from GEE and return it
-    as a normalised NumPy float32 array of shape ``(1, PATCH_SIZE, PATCH_SIZE)``.
-
-    Parameters
-    ----------
-    region_name : str
-        One of ``'tamil_nadu'`` or ``'gujarat'`` (case-insensitive).
-    target_date : str
-        ISO-8601 date string  (``'YYYY-MM-DD'``).  The collection is filtered
-        over a ±1-day window centred on this date to improve availability.
-
-    Returns
-    -------
-    np.ndarray
-        Shape ``(1, 256, 256)``, dtype ``float32``.  Values are the raw
-        Sentinel-1 σ₀ backscatter in dB, linearly scaled to ``[0, 1]``.
-
-    Raises
-    ------
-    ValueError
-        If ``region_name`` is not recognised.
-    RuntimeError
-        If no Sentinel-1 image is found for the requested region/date, or if
-        the GEE download fails.
+    Fetches a Sentinel-1 patch and extracts exact physical metadata for CMOD5.
+    
+    Args:
+        lat, lon: Center coordinates for the patch.
+        target_date: Target date string (YYYY-MM-DD).
+        
+    Returns:
+        A dictionary containing the image array, timestamp, mean sigma0, and incidence angle.
     """
-    # 1. Initialise GEE 
     _initialise_gee()
     
-    # 2. Create a precise 10km x 10km bounding box centered exactly on the requested coordinate
     roi = ee.Geometry.Point([lon, lat]).buffer(5000).bounds()
-
-    # 3. Build date window (±1 day for better coverage)
-    date_obj   = ee.Date(target_date)
+    date_obj = ee.Date(target_date)
+    
+    # 10-day window to make sure we actually catch a satellite pass
     start_date = date_obj.advance(-5, "day")
-    end_date   = date_obj.advance(5, "day")
+    end_date = date_obj.advance(5, "day")
 
-    logger.info(
-        "Querying S1-GRD | region=%s | date=%s | bbox=%s",
-        lat, lon, target_date, 
-    )
-    # 4. Filter Sentinel-1 GRD collection
     collection = (
         ee.ImageCollection(S1_COLLECTION)
         .filterBounds(roi)
         .filterDate(start_date, end_date)
-        # IW (Interferometric Wide) is the standard ocean / land mode
         .filter(ee.Filter.eq("instrumentMode", "IW"))
-        # VV polarisation – sensitive to ocean surface roughness
         .filter(ee.Filter.listContains("transmitterReceiverPolarisation", POLARISATION))
-        .select(POLARISATION)
+        .select([POLARISATION, 'angle']) 
     )
 
-    size: int = collection.size().getInfo()
-    if size == 0:
-        raise RuntimeError(
-            f"No Sentinel-1 IW/VV image found for region='{region_name}' "
-            f"around date='{target_date}'.  Try a different date."
-        )
+    if collection.size().getInfo() == 0:
+        raise RuntimeError(f"no s1 image found near {target_date}")
 
-    logger.info("Found %d S1 scene(s). Using the most recent one.", size)
-
-    # Use the most recent scene in the window
-    image: ee.Image = collection.sort("system:time_start", False).first()
+    image = collection.sort("system:time_start", False).first()
     
-    # Extract the exact millisecond the radar fired and convert to ISO 8601
     time_ms = image.get('system:time_start').getInfo()
     exact_timestamp = datetime.datetime.utcfromtimestamp(time_ms / 1000.0).isoformat()
 
-    # 5. Download the image patch as a GeoTIFF
-    sar_array = _download_image_as_array(image, roi)
+    # pull the physical metadata needed for cmod5
+    mean_dict = image.reduceRegion(
+        reducer=ee.Reducer.mean(),
+        geometry=roi,
+        scale=100
+    ).getInfo()
+    
+    mean_sigma0_db = mean_dict.get(POLARISATION, -15.0)
+    incidence_angle = mean_dict.get('angle', 35.0)
 
-    logger.info("SAR patch downloaded successfully. Shape: %s", sar_array.shape)
-    return sar_array, exact_timestamp
+    sar_array = _download_image_as_array(image.select(POLARISATION), roi)
 
+    # Extract the orbital pass direction to calculate true radar look angle
+    # Sentinel-1 looks right. Ascending = flying North, looking East (~78 deg)
+    # Descending = flying South, looking West (~282 deg)
+    try:
+        orbit_pass = image.get('orbitProperties_pass').getInfo()
+        radar_look_dir = 78.0 if orbit_pass == 'ASCENDING' else 282.0
+    except:
+        radar_look_dir = 0.0 # Fallback safety
 
-# Private helpers
+    return {
+        "sar_array": sar_array,
+        "mean_sigma0_db": float(mean_dict.get('VV', -20.0)),
+        "incidence_angle": float(mean_dict.get('angle', 35.0)),
+        "exact_timestamp": exact_timestamp,
+        "radar_look_direction": radar_look_dir  # <-- ADD THIS NEW KEY
+    }
 
 def _download_image_as_array(image: ee.Image, roi: ee.Geometry) -> np.ndarray:
-    """
-    Download a GEE image within ``roi`` as a raw NumPy array.
-
-    Uses ``ee.Image.getDownloadURL`` (synchronous small-patch download) which
-    returns a ZIP archive containing a GeoTIFF.
-
-    Returns
-    -------
-    np.ndarray
-        Shape ``(1, PATCH_SIZE, PATCH_SIZE)``, dtype ``float32``.
-    """
+    """Downloads the GEE image patch and normalizes it for the neural network."""
     try:
         import rasterio
-        from rasterio.io import MemoryFile
-        _use_rasterio = True
     except ImportError:
-        _use_rasterio = False
-        logger.warning(
-            "rasterio not installed – falling back to simulated SAR array."
-        )
+        logger.warning("rasterio missing, falling back to random array.")
+        return np.random.rand(1, PATCH_SIZE, PATCH_SIZE).astype(np.float32)
 
-    if not _use_rasterio:
-        return _simulate_sar_array()
-
-    # Build the download URL for a small patch
-    url: str = image.getDownloadURL(
-        {
-            "bands": [POLARISATION],
-            "region": roi,
-            "dimensions": f"{PATCH_SIZE}x{PATCH_SIZE}",
-            "format": "GEO_TIFF",
-        }
-    )
-
-    logger.debug("Downloading SAR patch from GEE URL: %s", url[:80] + "…")
-
+    url = image.getDownloadURL({
+        "bands": [POLARISATION], "region": roi,
+        "dimensions": f"{PATCH_SIZE}x{PATCH_SIZE}", "format": "GEO_TIFF"
+    })
+    
     response = requests.get(url, timeout=120)
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"GEE download failed (HTTP {response.status_code}): "
-            f"{response.text[:200]}"
-        )
-
-    # GEE wraps GeoTIFFs in a ZIP when multiple bands are requested;
-    # for a single band it may return the GeoTIFF directly.
     raw_bytes = response.content
 
-    if raw_bytes[:2] == b"PK":           # ZIP magic bytes
+    if raw_bytes[:2] == b"PK":           
         with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
             tif_name = [n for n in zf.namelist() if n.endswith(".tif")][0]
             raw_bytes = zf.read(tif_name)
 
     with rasterio.open(io.BytesIO(raw_bytes)) as src:
-        arr: np.ndarray = src.read(1).astype(np.float32)  # (H, W)
+        arr = src.read(1).astype(np.float32)
 
-    arr = _preprocess(arr)                                 # normalise
-    arr = arr[np.newaxis, ...]                             # → (1, H, W)
-    return arr
-
-
-def _preprocess(arr: np.ndarray) -> np.ndarray:
-    """
-    Normalise raw Sentinel-1 σ₀ dB values to the ``[0, 1]`` range.
-
-    Typical ocean σ₀ VV ranges from roughly -25 dB (calm) to -5 dB (rough).
-    Values outside this range are clipped before scaling.
-    """
+    # clip and normalize to [0, 1] bounds for the ai
     DB_MIN, DB_MAX = -30.0, 0.0
     arr = np.clip(arr, DB_MIN, DB_MAX)
     arr = (arr - DB_MIN) / (DB_MAX - DB_MIN)
-    return arr.astype(np.float32)
-
-
-def _simulate_sar_array() -> np.ndarray:
-    """
-    Return a deterministic synthetic SAR patch for offline testing /
-    when rasterio is unavailable.
-
-    Shape: ``(1, PATCH_SIZE, PATCH_SIZE)``, dtype ``float32``.
-    """
-    logger.warning("Using SIMULATED SAR array (no real GEE data).")
-    rng = np.random.default_rng(seed=42)
-    # Simulate ocean-like speckle noise centred around -15 dB normalised
-    arr = rng.normal(loc=0.5, scale=0.1, size=(PATCH_SIZE, PATCH_SIZE))
-    arr = np.clip(arr, 0.0, 1.0).astype(np.float32)
-    return arr[np.newaxis, ...]           # → (1, 256, 256)
+    return arr[np.newaxis, ...].astype(np.float32)
